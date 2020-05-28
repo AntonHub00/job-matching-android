@@ -38,6 +38,7 @@ import org.json.JSONObject;
 
 import java.security.AllPermission;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -57,6 +58,11 @@ public class MainActivity extends AppCompatActivity {
 
     private EditText percentage_box;
 
+    private TextView jobs_result;
+
+    // To store the return value: jobs and its matching percentages
+    final HashMap<String, Integer> jobs_and_percentages = new HashMap<>();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         AndroidNetworking.initialize(getApplicationContext());
@@ -68,6 +74,7 @@ public class MainActivity extends AppCompatActivity {
         fetch_jobs_button = findViewById(R.id.fetch_jobs);
         skills_list_view = findViewById(R.id.skills_list_view);
         percentage_box = findViewById(R.id.percentage);
+        jobs_result = findViewById(R.id.jobs_result);
 
         // Create request objects
         jobs_queue = Volley.newRequestQueue(this);
@@ -85,10 +92,18 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 if(!validate_percentage()) return;
                 int percentage_value = Integer.parseInt(percentage_box.getText().toString());
-                HashMap<String, Integer> jobs = get_jobs_from_api(percentage_value, get_selected_skills());
-                Log.d("TestJFAReturn", "onClick: " + jobs);
+                get_jobs_from_api(percentage_value, get_selected_skills());
             }
         });
+    }
+
+
+    private void show_matching_jobs() {
+        Collection<?> keys = jobs_and_percentages.keySet();
+        for(Object key: keys){
+            jobs_result.append("Job: " + key + " | Percentage: " + jobs_and_percentages.get(key) + "\n");
+        }
+        Log.d("Some", "show_matching_jobs: "+ "SSSSSSSSSSSSSSSSSSSSs");
     }
 
 
@@ -109,6 +124,7 @@ public class MainActivity extends AppCompatActivity {
 
         return skills_selected;
     }
+
 
     private boolean validate_percentage() {
         int percentage_value;
@@ -155,8 +171,6 @@ public class MainActivity extends AppCompatActivity {
                                 skills_array.add(skills.getString(i));
                             }
 
-                            Log.d("FAN", "onResponse: " + skills_array.toString());
-
                             Toast.makeText(getApplicationContext(),
                                     "Skills got successfully",
                                     Toast.LENGTH_LONG).show();
@@ -177,13 +191,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private HashMap<String, Integer> get_jobs_from_api(int percentage, ArrayList<String> skills_selected) {
+    private void get_jobs_from_api(int percentage, ArrayList<String> skills_selected) {
         String url = "http://192.168.100.65:8000/job_matching";
         JSONArray skills = new JSONArray(skills_selected);
         JSONObject json_body = new JSONObject();
 
-        // To store the return value: jobs and its matching percentages
-        final HashMap<String, Integer> jobs_and_percentages = new HashMap<>();
 
         // Creates request body
         try {
@@ -211,7 +223,12 @@ public class MainActivity extends AppCompatActivity {
                                 job_value = job_percentage.getString(0);
                                 job_percentage_value = job_percentage.getInt(1);
                                 jobs_and_percentages.put(job_value, job_percentage_value);
+                                Log.d("JJJ", "get_jobs_from_api: " + jobs_and_percentages.toString());
                             }
+
+                            Log.d("FAN", "onResponse: " + skills_array.toString());
+
+                            show_matching_jobs();
 
                             Toast.makeText(getApplicationContext(),
                                     "Matching jobs got successfully",
@@ -230,7 +247,5 @@ public class MainActivity extends AppCompatActivity {
                         error.printStackTrace();
                     }
                 });
-
-        return jobs_and_percentages;
     }
 }
