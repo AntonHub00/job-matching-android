@@ -2,5 +2,6 @@
     <string name="app_name">Job Matching</string>
 
     <string name="fetch_jobs">Fetch jobs</string>
-    <string name="fetch_skills">Fetch skills</string>
+    <string name="select_skills">Select all your skills</string>
+    <string name="matching_percentage">Select minimum match percentage for jobs</string>
 </resources>
