@@ -1,67 +1,53 @@
 package com.example.jobmatching;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
 import android.os.Bundle;
 import android.text.TextUtils;
-import android.util.Log;
 import android.util.SparseBooleanArray;
 import android.view.View;
-import android.widget.Adapter;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.Toast;
 
-import com.android.volley.AuthFailureError;
-import com.android.volley.Request;
 import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
-import com.android.volley.toolbox.RequestFuture;
 import com.android.volley.toolbox.Volley;
 import com.androidnetworking.AndroidNetworking;
 import com.androidnetworking.common.Priority;
 import com.androidnetworking.error.ANError;
-import com.androidnetworking.interfaces.JSONArrayRequestListener;
 import com.androidnetworking.interfaces.JSONObjectRequestListener;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.security.AllPermission;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 public class MainActivity extends AppCompatActivity {
 
     private Button fetch_jobs_button;
 
     private ListView skills_list_view;
+    private ListView jobs_list_view;
 
     private RequestQueue jobs_queue;
     private RequestQueue skills_queue;
 
     private ArrayList<String> skills_array;
+    private ArrayList<String> jobs_array;
 
     private EditText percentage_box;
 
-    private TextView jobs_result;
+    private final String base_url = "http://192.168.100.65:8000/";
+    private final String skills_endpoint = "skills";
+    private final String jobs_endpoint = "job_matching";
 
     // To store the return value: jobs and its matching percentages
-    final HashMap<String, Integer> jobs_and_percentages = new HashMap<>();
+    HashMap<String, Integer> jobs_and_percentages;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -73,15 +59,18 @@ public class MainActivity extends AppCompatActivity {
         // Get GUI elements
         fetch_jobs_button = findViewById(R.id.fetch_jobs);
         skills_list_view = findViewById(R.id.skills_list_view);
+        jobs_list_view = findViewById(R.id.jobs_list_view);
         percentage_box = findViewById(R.id.percentage);
-        jobs_result = findViewById(R.id.jobs_result);
 
         // Create request objects
         jobs_queue = Volley.newRequestQueue(this);
         skills_queue = Volley.newRequestQueue(this);
 
-        // Skills got from REST API
+        // Data got from REST API (Skills to select and matching jobs according to skills and
+        // percentage selected
         skills_array = new ArrayList<String>();
+        jobs_array = new ArrayList<String>();
+        jobs_and_percentages = new HashMap<>();
 
         // Fill ListView with the skills got from the API when the Activity is created
         get_skills_from_api();
@@ -90,29 +79,18 @@ public class MainActivity extends AppCompatActivity {
         fetch_jobs_button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(!validate_percentage()) return;
+                if(!validate_inputs()) return;
                 int percentage_value = Integer.parseInt(percentage_box.getText().toString());
-                get_jobs_from_api(percentage_value, get_selected_skills());
+                ArrayList<String> selected_skills = get_selected_skills();
+                get_jobs_from_api(percentage_value, selected_skills);
             }
         });
-    }
-
-
-    private void show_matching_jobs() {
-        Collection<?> keys = jobs_and_percentages.keySet();
-        for(Object key: keys){
-            jobs_result.append("Job: " + key + " | Percentage: " + jobs_and_percentages.get(key) + "\n");
-        }
-        Log.d("Some", "show_matching_jobs: "+ "SSSSSSSSSSSSSSSSSSSSs");
     }
 
 
     private ArrayList<String> get_selected_skills() {
         // Skills selected from ListView as array
         ArrayList<String> skills_selected = new ArrayList<>();
-
-        // Selected skills from ListView
-        SparseBooleanArray selected_skills_from_list = skills_list_view.getCheckedItemPositions();
 
         // Iterate over the ListView elements, checks which ones are checked and add the checked ones
         // to the array list
@@ -126,8 +104,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    private boolean validate_percentage() {
+    private boolean validate_inputs() {
         int percentage_value;
+
         // Check if percentage is set
         if (TextUtils.isEmpty(percentage_box.getText())) {
             percentage_box.setError("This field is required");
@@ -141,6 +120,14 @@ public class MainActivity extends AppCompatActivity {
             return false;
         }
 
+        SparseBooleanArray selected_skills_from_list = skills_list_view.getCheckedItemPositions();
+
+        if (selected_skills_from_list.size() < 1){
+            Toast.makeText(getApplicationContext(), "Select at least 1 skill", Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+
         return true;
     }
 
@@ -148,7 +135,7 @@ public class MainActivity extends AppCompatActivity {
     public void get_skills_from_api() {
         JSONObject jsonObject = new JSONObject();
 
-        AndroidNetworking.post("http://192.168.100.65:8000/skills")
+        AndroidNetworking.post(base_url+skills_endpoint)
                 .addJSONObjectBody(jsonObject) // posting json
                 .setTag("test")
                 .setPriority(Priority.MEDIUM)
@@ -165,7 +152,6 @@ public class MainActivity extends AppCompatActivity {
                             skills_list_view.setAdapter(skills_adapter);
                             skills_list_view.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
 
-
                             JSONArray skills = response.getJSONArray("result");
                             for (int i=0; i < skills.length(); i++) {
                                 skills_array.add(skills.getString(i));
@@ -173,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
 
                             Toast.makeText(getApplicationContext(),
                                     "Skills got successfully",
-                                    Toast.LENGTH_LONG).show();
+                                    Toast.LENGTH_SHORT).show();
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
@@ -192,10 +178,9 @@ public class MainActivity extends AppCompatActivity {
 
 
     private void get_jobs_from_api(int percentage, ArrayList<String> skills_selected) {
-        String url = "http://192.168.100.65:8000/job_matching";
+        String url = base_url+skills_endpoint;
         JSONArray skills = new JSONArray(skills_selected);
         JSONObject json_body = new JSONObject();
-
 
         // Creates request body
         try {
@@ -214,25 +199,35 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onResponse(JSONObject response) {
                         try {
+                             // Makes it list item a "checkbox"
+                             ArrayAdapter<String> jobs_adapter = new ArrayAdapter<String>(
+                                     getApplicationContext(),
+                                     android.R.layout.simple_list_item_1, jobs_array);
+
+                             jobs_list_view.setAdapter(jobs_adapter);
+                             jobs_list_view.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
+
                             String job_value;
                             int job_percentage_value;
+
+                            jobs_array.clear();
 
                             JSONArray all_jobs_percentages = response.getJSONArray("result");
                             for (int i=0; i < all_jobs_percentages.length(); i++) {
                                 JSONArray job_percentage = all_jobs_percentages.getJSONArray(i);
                                 job_value = job_percentage.getString(0);
                                 job_percentage_value = job_percentage.getInt(1);
-                                jobs_and_percentages.put(job_value, job_percentage_value);
-                                Log.d("JJJ", "get_jobs_from_api: " + jobs_and_percentages.toString());
+                                jobs_array.add(job_value + " (" + String.valueOf(job_percentage_value) + "%)");
                             }
 
-                            Log.d("FAN", "onResponse: " + skills_array.toString());
+                            if (jobs_array.size() < 1) {
+                                jobs_array.add("No matches found.\nTry decreasing the match percentage or selecting more skills.");
+                            } else {
+                                Toast.makeText(getApplicationContext(),
+                                        "Matching jobs got successfully",
+                                        Toast.LENGTH_SHORT).show();
+                            }
 
-                            show_matching_jobs();
-
-                            Toast.makeText(getApplicationContext(),
-                                    "Matching jobs got successfully",
-                                    Toast.LENGTH_LONG).show();
                         } catch (JSONException e) {
                             e.printStackTrace();
                         }
