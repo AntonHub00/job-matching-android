@@ -4,5 +4,5 @@
     <string name="fetch_jobs">Get matches</string>
     <string name="select_skills">Select all your skills</string>
     <string name="matching_percentage">Select minimum match percentage for jobs</string>
-    <string name="jobs_matched">Jobs matched and percentage match</string>
+    <string name="jobs_matched">Jobs matched and percentage matched</string>
 </resources>
